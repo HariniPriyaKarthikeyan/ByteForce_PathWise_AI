@@ -1,0 +1,16 @@
+{
+  "cam_url": "http://100.69.244.31:8080/video",
+  "ip": "100.69.244.31:8080",
+  "qr_cm": 10.0,
+  "cal_cm": 50.0,
+  "step_cm": 65.0,
+  "arrive_cm": 35.0,
+  "pulse_on": 0.35,
+  "pulse_off": 0.3,
+  "turn90": 0.6,
+  "max_travel": 40.0,
+  "speak": true,
+  "drive_mode": "pulse",
+  "endpoint_style": "path",
+  "cue_far_every": 6.0
+}
