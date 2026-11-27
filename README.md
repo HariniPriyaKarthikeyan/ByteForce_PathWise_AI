@@ -4,7 +4,6 @@
 
 **Team:** ByteForce  
 **Live Demo:** https://byteforcepathwiseai-lhcjgao9gms4ainic2hwfl.streamlit.app/  
-**GitHub:** https://github.com/HariniPriyaKarthikeyan/ByteForce_PathWise_AI
 
 ##  About the Project
 
