@@ -1,46 +1,3 @@
-"""
-SmartTrolley AI - Streamlit control & demo dashboard  (v3 - camera + QR fixes)
-
-Run with:   streamlit run smart_trolley_app.py
-Install:    pip install -U streamlit opencv-python numpy requests
-Optional:   pip install pyzbar            (extra QR decoder)
-            pip install SpeechRecognition (microphone commands)
-            Linux audio: sudo apt install espeak-ng ffmpeg
-
-WHAT WAS FIXED IN v3
---------------------
-CAMERA
- 1. The camera thread now RECONNECTS by itself. Before, one failed open (or a
-    dropped stream) killed the thread / looped forever and never recovered.
- 2. Automatic fallback: if the MJPEG /video stream will not open, the app
-    switches to polling IP Webcam's /shot.jpg snapshot URL (much more reliable
-    over a hotspot). The URL is normalised (http:// and /video added if missing).
- 3. "Test camera" button + clear log messages that say WHY it cannot connect.
- 4. Capture and QR detection run in separate threads, so a slow QR decode no
-    longer makes the video lag and frames are never read from a stale buffer.
-
-QR SCANNING
- 5. THE BIG ONE: the old code overwrote the detected QR with "" on every
-    frame that had no QR, so the navigation loop almost never saw it. A
-    detection is now remembered (with a timestamp) and read via fresh_qr().
- 6. Much stronger detector: OpenCV Aruco-QR detector + classic detector, tried
-    on the raw image, a contrast-enhanced copy and an upscaled copy (plus
-    pyzbar if installed). Reads QR codes shown on a laptop screen far better.
- 7. Calibration now works reliably (uses the median of recent detections and
-    remembers the frame width, so a different stream resolution can't break it).
- 8. Distance smoothing no longer mixes widths from different QR codes.
-
-APP / UI
- 9. Typed or spoken commands were re-run on EVERY click (e.g. "go to milk"
-    restarted the trip each rerun). Each command now runs exactly once.
-10. The live panel draws its own columns inside the fragment, so it no longer
-    piles up elements and freezes the page.
-11. Works on old and new Streamlit button/image width arguments.
-12. Simulation mode can never move real motors; the app always starts in
-    DRY RUN; pulse mode is the default (slow, scans for the QR while stopped).
-13. "Test ESP32" no longer depends on a /status route existing.
-"""
-
 import collections
 import heapq
 import io
@@ -55,7 +12,6 @@ import sys
 import threading
 import time
 from urllib.parse import urlparse
-
 import cv2
 import numpy as np
 import requests
@@ -72,9 +28,6 @@ try:                      # optional extra decoder
 except Exception:         # pragma: no cover
     _pyzbar = None
 
-# =====================================================
-# MAP + DIJKSTRA
-# =====================================================
 
 NODES = {
     "ENTRANCE": (0, 0),
@@ -134,12 +87,7 @@ def heading_of(a, b):
     return 1 if dx > 0 else 3
 
 
-# =====================================================
-# QR DETECTION (module level so it can be tested alone)
-# =====================================================
-
 def make_detectors():
-    """Best detector first. Aruco-based QR detector needs OpenCV >= 4.8."""
     dets = []
     if hasattr(cv2, "QRCodeDetectorAruco"):
         try:
@@ -168,11 +116,7 @@ def _try_detector(det, img):
 
 
 def detect_qr(frame, detectors):
-    """
-    Returns (text_UPPER, width_px, 4x2 corner array) in FULL-FRAME pixels.
-    text is "" when a QR shape was found but could not be decoded.
-    Returns ("", None, None) when nothing QR-like is visible.
-    """
+    
     h, w = frame.shape[:2]
     scale = DETECT_W / float(w) if w > DETECT_W else 1.0
     base = (cv2.resize(frame, None, fx=scale, fy=scale,
@@ -214,16 +158,9 @@ def detect_qr(frame, detectors):
     return "", None, None
 
 
-# =====================================================
-# SPEAKER
-# =====================================================
 
 class Speaker:
-    """
-    Non-blocking TTS with a priority queue.
-    Backend order: espeak-ng/espeak/spd-say, macOS say, Windows SAPI
-    (PowerShell, built in), pyttsx3, then log-only.
-    """
+    
 
     def __init__(self, log):
         self.log = log
@@ -319,10 +256,6 @@ class Speaker:
                 self.log(f"Speech error: {type(e).__name__}: {e}")
 
 
-# =====================================================
-# TROLLEY CONTROLLER
-# =====================================================
-
 DEFAULTS = dict(
     cam_url="http://192.168.4.2:8080/video",
     ip="192.168.4.1",
@@ -358,7 +291,7 @@ class Trolley:
         self.dist_is_estimate = True
         self._load_cal()
 
-        # ---- camera ----
+        
         self.frame_jpeg = None
         self.frame_w = None
         self.frame_time = 0.0
@@ -373,15 +306,13 @@ class Trolley:
         self._sim_prev = False
         self._sim_fake = 400.0
 
-        # ---- QR detection ----
-        self.det = None                       # last detection dict
+        
+        self.det = None                       
         self._wpx_hist = collections.deque(maxlen=9)
         self._last_code = ""
         self._last_code_t = 0.0
         self._log_times = {}
         self.engine_names = ""
-
-        # ---- navigation ----
         self.state = "Idle"
         self.running = False
         self.current = "ENTRANCE"
@@ -392,7 +323,6 @@ class Trolley:
         self.last_instruction = ""
         self.sim_target = None
 
-        # ---- motor diagnostics ----
         self.motor_ok = 0
         self.motor_fail = 0
         self.last_motor_error = ""
@@ -400,7 +330,6 @@ class Trolley:
         self.speaker = Speaker(self.log)
         self._last_far_cue = 0.0
 
-    # ---------------- logging / settings ----------------
     def log(self, msg):
         self.logs.appendleft(f"{time.strftime('%H:%M:%S')}  {msg}")
 
@@ -434,7 +363,6 @@ class Trolley:
         except Exception:
             pass
 
-    # ---------------- calibration / distance ----------------
     def _load_cal(self):
         if os.path.exists(CALIBRATION_FILE):
             try:
@@ -453,7 +381,6 @@ class Trolley:
         return sorted(recent)[len(recent) // 2]
 
     def calibrate(self):
-        """Call while a QR is held exactly cal_cm from the camera."""
         wpx = self._recent_width(2.0)
         if wpx is None:
             return False
@@ -474,7 +401,6 @@ class Trolley:
         return max(1, int(round(cm / self.cfg["step_cm"])))
 
     def _effective_focal(self):
-        """Calibrated focal if known, else a rough FOV-based guess (never None)."""
         if self.focal:
             self.dist_is_estimate = False
             f = self.focal
@@ -496,7 +422,6 @@ class Trolley:
             return d["code"], self._distance(d["wpx"])
         return "", None
 
-    # ---------------- camera ----------------
     def start_camera(self):
         token = object()
         self.cam_token = token
@@ -510,7 +435,6 @@ class Trolley:
 
     @staticmethod
     def _split_url(url):
-        """-> (base 'http://ip:port', stream_url). Adds http:// and /video if missing."""
         url = (url or "").strip()
         if not url:
             return None, None
@@ -573,7 +497,6 @@ class Trolley:
                 time.sleep(1.0)
 
     def _run_stream(self, token, url):
-        """MJPEG stream. Returns 'nofirst' (never got a frame) or 'lost'."""
         self.cam_status = "Opening video stream..."
         cap = None
         try:
@@ -608,7 +531,6 @@ class Trolley:
                 cap.release()
 
     def _run_snapshots(self, token, base):
-        """Poll IP Webcam's /shot.jpg. Slower than a stream but very reliable."""
         url = base + "/shot.jpg"
         sess = requests.Session()
         fails = 0
@@ -651,7 +573,6 @@ class Trolley:
         self._publish(frame)
 
     def _publish(self, frame):
-        """Build the browser JPEG (with QR outline). Never touches `frame`."""
         try:
             h, w = frame.shape[:2]
             scale = min(1.0, self.DISPLAY_W / float(w))
@@ -680,7 +601,6 @@ class Trolley:
         except Exception as e:
             self._log_throttled("pub", f"Frame encode failed: {type(e).__name__}: {e}")
 
-    # ---------------- QR detection thread ----------------
     def _detect_loop(self, token):
         detectors = make_detectors()
         self.engine_names = "+".join(n for n, _ in detectors) + \
@@ -719,9 +639,7 @@ class Trolley:
         if text:
             self._log_throttled(f"seen-{text}", f"QR detected: {text}", every=6.0)
 
-    # ---------------- simulation (no hardware) ----------------
     def _sim_loop(self, token):
-        """Fake QR that gets closer while the trolley 'moves'."""
         self.cam_status = "SIMULATED"
         self.cam_mode = "sim"
         self.log("Simulation camera started (motors are NEVER driven in sim mode)")
@@ -751,7 +669,6 @@ class Trolley:
             self._publish(frame)
             time.sleep(0.05)
 
-    # ---------------- diagnostics ----------------
     def test_camera(self):
         base, _ = self._split_url(self.cfg["cam_url"])
         if not base:
@@ -773,7 +690,6 @@ class Trolley:
         except requests.RequestException as e:
             return False, f"Phone reachable but snapshot failed: {type(e).__name__}"
 
-    # ---------------- ESP32 ----------------
     def _url_for(self, command):
         ip = self.cfg["ip"].strip()
         if not ip.startswith("http"):
@@ -813,7 +729,6 @@ class Trolley:
         return False
 
     def test_connection(self):
-        """Sends a harmless 'stop' and reports whether the ESP32 answered."""
         if self.cfg["dry_run"] or self.cfg["sim_mode"]:
             return False, "DRY RUN / simulation is ON - turn both off to test the motors."
         url = self._url_for("stop")
@@ -837,7 +752,6 @@ class Trolley:
         self.state = "STOPPED"
         self.say("Emergency stop.", urgent=True)
 
-    # ---------------- movement ----------------
     def turn(self, command, seconds):
         end = time.time() + seconds
         while time.time() < end:
@@ -866,7 +780,6 @@ class Trolley:
         return True
 
     def _distance_cue(self, code, dist, target, announced):
-        """Speak 5,4,3,2,1 steps plus occasional coarse guidance."""
         if dist is None:
             return
         name = (code or target).lower()
@@ -949,7 +862,6 @@ class Trolley:
         self.send("stop")
         return False
 
-    # ---------------- mission ----------------
     def start_mission(self, items):
         if self.running:
             return False
@@ -1008,7 +920,6 @@ class Trolley:
         self.log("Position reset to ENTRANCE, facing north")
         self.say("Position reset to entrance.")
 
-    # ---------------- voice / typed commands ----------------
     def handle_voice_command(self, text):
         t = (text or "").lower().strip()
         if not t:
@@ -1069,9 +980,6 @@ def get_trolley():
     return Trolley()
 
 
-# =====================================================
-# SPEECH-TO-TEXT
-# =====================================================
 
 def _ensure_wav(data: bytes) -> bytes:
     if data[:4] == b"RIFF":
@@ -1118,16 +1026,12 @@ def transcribe_audio(data: bytes) -> str:
         return f"__ERROR__{e}"
 
 
-# =====================================================
-# UI helpers
-# =====================================================
 
 HAS_FRAGMENT = hasattr(st, "fragment")
 _WIDE = [{"width": "stretch"}, {"use_container_width": True}, {}]
 
 
 def wide(fn, *args, **kw):
-    """Call a Streamlit widget with whichever 'full width' argument this version has."""
     for i, extra in enumerate(_WIDE):
         try:
             return fn(*args, **kw, **extra)
@@ -1144,8 +1048,6 @@ def _fragment(**kw):
 
 @_fragment(run_every=0.4)
 def live_view():
-    """Video + status. Its columns are created INSIDE the fragment so each
-    refresh replaces the old content instead of piling up."""
     try:
         T = get_trolley()
         left, right = st.columns([3, 2])
@@ -1193,12 +1095,9 @@ def live_view():
 
 
 
-# PathWise AI accessibility add-on
 from pathwise_features import pathwise_panel
 
-# =====================================================
-# MAIN UI
-# =====================================================
+
 
 def main():
     if not HAS_FRAGMENT:
@@ -1213,7 +1112,6 @@ def main():
     st.caption("Voice-guided shopping assistant for visually impaired shoppers — "
                "controlled demonstration prototype")
 
-    # ---------------- sidebar ----------------
     with st.sidebar:
         st.header("⚙️ Setup")
 
@@ -1331,7 +1229,6 @@ def main():
 
         T.save_settings()
 
-    # ---------------- controls ----------------
     col_list, col_go, col_manual = st.columns([2, 2, 3])
     with col_list:
         st.subheader("🎯 Shopping list")
