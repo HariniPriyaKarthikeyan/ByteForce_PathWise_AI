@@ -6,7 +6,7 @@
 **Live Demo:** https://byteforcepathwiseai-lhcjgao9gms4ainic2hwfl.streamlit.app/  
 **GitHub:** https://github.com/HariniPriyaKarthikeyan/ByteForce_PathWise_AI
 
-## 1. About the Project
+##  About the Project
 
 SmartTrolley AI is an AI-assisted shopping prototype designed to support visually impaired shoppers in supermarket environments.
 
@@ -16,7 +16,7 @@ Users can select products, receive spoken navigation instructions and monitor th
 
 The project also integrates PathWise AI, an accessibility add-on that explores AI-assisted aisle analysis and community accessibility reporting.
 
-## 2. Key Features
+##  Key Features
 
 ### Voice-Controlled Navigation
 - Accepts typed and spoken commands.
@@ -59,7 +59,7 @@ The project also integrates PathWise AI, an accessibility add-on that explores A
 - Includes an emergency stop.
 - Stops navigation when checkpoints cannot be detected.
 
-## 3. Technologies Used
+## Technologies Used
 
 | Technology | Purpose |
 |---|---|
@@ -78,7 +78,7 @@ The project also integrates PathWise AI, an accessibility add-on that explores A
 | SQLite | Accessibility report storage |
 | JSON | Settings and calibration storage |
 
-## 4. System Architecture
+##  System Architecture
 
 1. The user selects products or provides a voice command.
 2. The application calculates the shortest route using Dijkstra's algorithm.
@@ -89,7 +89,7 @@ The project also integrates PathWise AI, an accessibility add-on that explores A
 7. The ESP32 receives movement commands in hardware mode.
 8. The PathWise AI module provides additional accessibility analysis and reporting.
 
-## 5. Supermarket Navigation Map
+## Supermarket Navigation Map
 
 The prototype currently supports five locations:
 
@@ -103,7 +103,7 @@ The navigation graph connects the entrance to the junction and the junction to t
 
 Dijkstra's algorithm determines the shortest available route between locations.
 
-## 6. Installation and Setup
+## Installation and Setup
 
 ### Prerequisites
 - Python 3.10 or compatible version
@@ -159,7 +159,7 @@ streamlit run smart_trolley_app.py
 4. Enter the ESP32 IP address in the application.
 5. Test the connection while DRY RUN is enabled.
 
-## 7. Available Commands
+## Available Commands
 
 | Command | Function |
 |---|---|
