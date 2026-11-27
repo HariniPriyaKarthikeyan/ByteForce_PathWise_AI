@@ -1,10 +1,11 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 streamlit>=1.36
 opencv-python
 requests
-pyttsx3
 numpy
 pandas
-ultralytics
 Pillow
-opencv-python-headless
+torch
+torchvision
+ultralytics
 SpeechRecognition
